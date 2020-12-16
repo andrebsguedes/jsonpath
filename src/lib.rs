@@ -129,12 +129,16 @@ extern crate env_logger;
 extern crate log;
 extern crate serde;
 extern crate serde_json;
+extern crate flexbuffers;
 
 use serde_json::Value;
 
 pub use parser::Parser; // TODO private
 pub use select::JsonPathError;
 pub use select::{Selector, SelectorMut};
+pub use selectfb::Selector as FbSelector;
+pub use selectfb::FbPathError;
+pub use selectfb::value::FbValue;
 
 #[doc(hidden)]
 mod ffi;
@@ -142,6 +146,8 @@ mod ffi;
 mod parser;
 #[doc(hidden)]
 mod select;
+#[doc(hidden)]
+mod selectfb;
 
 /// It is a high-order function. it compile a jsonpath and then returns a closure that has JSON as argument. if you need to reuse a jsonpath, it is good for performance.
 ///
@@ -276,6 +282,14 @@ pub fn selector_as<T: serde::de::DeserializeOwned>(
     move |path: &str| selector.str_path(path)?.reset_value().select_as()
 }
 
+pub fn fb_selector_as<T: serde::de::DeserializeOwned>(
+    fb: flexbuffers::Reader,
+) -> impl FnMut(&str) -> Result<Vec<T>, FbPathError> + '_ {
+    let mut selector = FbSelector::default();
+    let _ = selector.value(fb.into());
+    move |path: &str| selector.str_path(path)?.reset_value().select_as()
+}
+
 /// It is a simple select function. but it compile the jsonpath argument every time.
 ///
 /// ```rust
@@ -303,6 +317,10 @@ pub fn selector_as<T: serde::de::DeserializeOwned>(
 /// ```
 pub fn select<'a>(json: &'a Value, path: &str) -> Result<Vec<&'a Value>, JsonPathError> {
     Selector::default().str_path(path)?.value(json).select()
+}
+
+pub fn fb_select<'a>(fb: flexbuffers::Reader<'a>, path: &str) -> Result<Vec<FbValue<'a>>, FbPathError> {
+    FbSelector::default().str_path(path)?.value(fb.into()).select()
 }
 
 /// It is the same to `select` function but it return the result as string.
